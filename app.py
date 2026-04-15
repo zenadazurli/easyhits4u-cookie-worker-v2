@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# app.py - Login con Browserless BQL + chiavi da Supabase + loop + DEBUG
+# app.py - Login con Browserless BQL + chiavi da Supabase + loop
 
 import requests
 import json
@@ -75,13 +75,13 @@ def get_working_keys():
         .eq('status', 'working')\
         .execute()
     
-    keys = [row['api_key'] for row in resp.data]
+    # PULISCI le chiavi rimuovendo caratteri invisibili (IMPORTANTE!)
+    keys = []
+    for row in resp.data:
+        clean_key = row['api_key'].strip()  # <--- QUESTO RISOLVE IL PROBLEMA!
+        keys.append(clean_key)
     
-    # DEBUG: stampa ogni chiave con dettagli
-    log(f"📋 DEBUG - Chiavi lette dal database ({len(keys)}):")
-    for i, key in enumerate(keys):
-        log(f"   [{i+1}] lunghezza={len(key)}, repr={repr(key[:30])}...")
-    
+    log(f"📋 Trovate {len(keys)} chiavi 'working' nel database")
     return keys
 
 def get_cf_token(api_key):
@@ -120,8 +120,8 @@ def build_cookie_string(cookies_dict):
     return '; '.join([f"{k}={v}" for k, v in cookies_dict.items()])
 
 def login_and_get_cookies(api_key):
-    # DEBUG: mostra la chiave esatta che stiamo usando
-    log(f"   🔑 CHIAVE TEST: '{api_key[:20]}...' (len={len(api_key)})")
+    # Pulisci anche qui per sicurezza
+    api_key = api_key.strip()
     
     session = requests.Session()
     headers = {
@@ -188,7 +188,7 @@ def save_cookies(cookie_string, user_id, sesids):
     
     log("   💾 Cookie salvati su file")
     
-    # Salva anche su Supabase (opzionale, per il bot di autosurf)
+    # Salva anche su Supabase
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
         supabase.table('account_cookies').upsert({
@@ -212,10 +212,8 @@ def generate_cookie():
         log("❌ Nessuna chiave 'working' trovata nel database")
         return False
     
-    log(f"🔑 Trovate {len(keys)} chiavi 'working'")
-    
-    for i, api_key in enumerate(keys):
-        log(f"🔑 [{i+1}/{len(keys)}] Tentativo con chiave: {api_key[:15]}...")
+    for i, api_key in enumerate(keys, 1):
+        log(f"🔑 [{i}/{len(keys)}] Tentativo con chiave: {api_key[:15]}...")
         result = login_and_get_cookies(api_key)
         if result:
             cookie_string, user_id, sesids = result
@@ -230,11 +228,10 @@ def generate_cookie():
 
 def main():
     log("=" * 50)
-    log("🚀 GENERATORE COOKIE DINAMICO (CHIAVI DA SUPABASE) - DEBUG")
+    log("🚀 GENERATORE COOKIE DINAMICO (CHIAVI DA SUPABASE)")
     log(f"📅 Intervallo: {REFRESH_INTERVAL // 3600} ore")
     log("=" * 50)
     
-    # Verifica connessione a Supabase
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         log("❌ SUPABASE_URL o SUPABASE_SERVICE_KEY non impostate")
         return
