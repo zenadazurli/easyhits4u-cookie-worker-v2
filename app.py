@@ -15,7 +15,8 @@ from supabase import create_client
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 
-EASYHITS_EMAIL = "sandrominori50+uiszuzoqatr@gmail.com"
+# CREDENZIALI - ACCOUNT ORIGINALE (QUELLO CHE FUNZIONA!)
+EASYHITS_EMAIL = "sandrominori50+giorgiofaggiolini@gmail.com"
 EASYHITS_PASSWORD = "DDnmVV45!!"
 REFERER_URL = "https://www.easyhits4u.com/?ref=nicolacaporale"
 BROWSERLESS_URL = "https://production-sfo.browserless.io/chrome/bql"
@@ -52,12 +53,13 @@ class CookieHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+    
     def log_message(self, format, *args):
         pass
 
 def start_http_server():
     server = HTTPServer(('0.0.0.0', PORT), CookieHandler)
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🌐 Server HTTP avviato sulla porta {PORT}")
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🌐 Server HTTP avviato sulla porta {PORT} - GET /cookies")
     server.serve_forever()
 
 threading.Thread(target=start_http_server, daemon=True).start()
@@ -75,10 +77,10 @@ def get_working_keys():
         .eq('status', 'working')\
         .execute()
     
-    # PULISCI le chiavi rimuovendo caratteri invisibili (IMPORTANTE!)
+    # Pulisci le chiavi da caratteri invisibili
     keys = []
     for row in resp.data:
-        clean_key = row['api_key'].strip()  # <--- QUESTO RISOLVE IL PROBLEMA!
+        clean_key = row['api_key'].strip()
         keys.append(clean_key)
     
     log(f"📋 Trovate {len(keys)} chiavi 'working' nel database")
@@ -120,23 +122,30 @@ def build_cookie_string(cookies_dict):
     return '; '.join([f"{k}={v}" for k, v in cookies_dict.items()])
 
 def login_and_get_cookies(api_key):
-    # Pulisci anche qui per sicurezza
+    # Pulisci la chiave
     api_key = api_key.strip()
     
     session = requests.Session()
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Firefox/148.0',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'it-IT,it;q=0.8,en-US;q=0.5,en;q=0.3',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
         'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': 'https://www.easyhits4u.com/',
+        'Origin': 'https://www.easyhits4u.com',
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1',
     }
     
     # GET homepage
-    session.get("https://www.easyhits4u.com/", headers=headers, verify=False, timeout=15)
-    time.sleep(1)
+    try:
+        session.get("https://www.easyhits4u.com/", headers=headers, verify=False, timeout=15)
+        time.sleep(1)
+    except Exception as e:
+        log(f"   ❌ Errore homepage: {e}")
+        return None
     
+    # Token Cloudflare
     token = get_cf_token(api_key)
     if not token:
         return None
@@ -154,28 +163,48 @@ def login_and_get_cookies(api_key):
         'password': EASYHITS_PASSWORD,
         'cf-turnstile-response': token,
     }
-    login_resp = session.post("https://www.easyhits4u.com/logon/", data=data, headers=login_headers, allow_redirects=True, timeout=30)
-    if login_resp.status_code != 200:
+    
+    try:
+        login_resp = session.post("https://www.easyhits4u.com/logon/", data=data, headers=login_headers, allow_redirects=True, timeout=30)
+        log(f"      Login POST status: {login_resp.status_code}")
+        if login_resp.status_code != 200:
+            return None
+        time.sleep(2)
+    except Exception as e:
+        log(f"   ❌ Errore POST login: {e}")
         return None
-    time.sleep(2)
     
     # GET /member/
-    session.get("https://www.easyhits4u.com/member/", headers=headers, verify=False, timeout=15)
-    time.sleep(1)
+    try:
+        session.get("https://www.easyhits4u.com/member/", headers=headers, verify=False, timeout=15)
+        time.sleep(1)
+    except Exception as e:
+        log(f"   ⚠️ Errore member: {e}")
     
     # GET /surf/
-    session.get("https://www.easyhits4u.com/surf/", headers=headers, verify=False, timeout=15)
-    time.sleep(1)
+    try:
+        session.get("https://www.easyhits4u.com/surf/", headers=headers, verify=False, timeout=15)
+        time.sleep(1)
+    except Exception as e:
+        log(f"   ⚠️ Errore surf: {e}")
     
     # GET referer
-    session.get(REFERER_URL, headers=headers, verify=False, timeout=15)
+    try:
+        session.get(REFERER_URL, headers=headers, verify=False, timeout=15)
+    except Exception as e:
+        log(f"   ⚠️ Errore referer: {e}")
     
     cookies = session.cookies.get_dict()
+    log(f"   🍪 Cookie ottenuti: {list(cookies.keys())}")
+    
     if 'user_id' in cookies and 'sesids' in cookies:
         cookies['surftype'] = '2'
         cookie_string = build_cookie_string(cookies)
+        log(f"   ✅ Login completo! user_id={cookies['user_id']}, sesids={cookies['sesids']}")
         return cookie_string, cookies['user_id'], cookies['sesids']
-    return None
+    else:
+        log(f"   ❌ Cookie essenziali mancanti: user_id={cookies.get('user_id')}, sesids={cookies.get('sesids')}")
+        return None
 
 def save_cookies(cookie_string, user_id, sesids):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -229,9 +258,11 @@ def generate_cookie():
 def main():
     log("=" * 50)
     log("🚀 GENERATORE COOKIE DINAMICO (CHIAVI DA SUPABASE)")
+    log(f"📧 Account: {EASYHITS_EMAIL}")
     log(f"📅 Intervallo: {REFRESH_INTERVAL // 3600} ore")
     log("=" * 50)
     
+    # Verifica connessione a Supabase
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         log("❌ SUPABASE_URL o SUPABASE_SERVICE_KEY non impostate")
         return
@@ -248,12 +279,10 @@ def main():
         success = generate_cookie()
         if success:
             log(f"✅ Cookie generato. Prossimo tra {REFRESH_INTERVAL // 3600} ore")
+            time.sleep(REFRESH_INTERVAL)
         else:
             log("❌ Nessuna chiave funzionante. Riprovo tra 1 ora")
             time.sleep(3600)
-            continue
-        
-        time.sleep(REFRESH_INTERVAL)
 
 if __name__ == "__main__":
     main()
