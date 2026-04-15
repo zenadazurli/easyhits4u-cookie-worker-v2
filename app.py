@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# app.py - Login con Browserless BQL + acquisizione cookie completi + server HTTP per download
+# app.py - Login con Browserless BQL + chiavi da Supabase + loop
 
 import requests
 import json
@@ -9,35 +9,25 @@ import pickle
 import threading
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from supabase import create_client
 
-# ==================== CHIAVI VALIDE ====================
-VALID_KEYS = [
-    "2UL8m6BcAfHYAFxd5ecc52e551f286dbd72cce5fa350a2091",
-    "2UL8n777kF6fwCmbfc2300911b1fac61745a7d382e65a9219",
-    "2UL8pINenLzFZZxd7139e0a88d9b01b982fa4d19fb80c5322",
-    "2UL8qeyKL6Pktwj5f32492aa3ed7aa80ebefb7a44af6ef2e2",
-    "2UL8sQdVV06yZkOd5f22643a2f467a87d06d04a2b667a6a86",
-    "2UL8ueD9EJSZeXm773e84c545f86f762185487f1b57c06fe7",
-    "2UL8wv0wEuEFmEe629ee64554980c6ae710b550e834dcfefd",
-    "2UL8xelkv5JaWc3e4faa839aa48102cf37c41ae894b532fcb",
-    "2UL8zDUapLqCSBU770f53ccdf1591ce45e6371304b72b0c92",
-    "2UL9055xj8Nv4l221a380b4cb0dab7bdc105d95ac2635539c",
-]
+# ==================== CONFIGURAZIONE ====================
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 
-BROWSERLESS_URL = "https://production-sfo.browserless.io/chrome/bql"
-
-# CREDENZIALI
-EASYHITS_EMAIL = "sandrominori50+giorgiofaggiolini@gmail.com"
+EASYHITS_EMAIL = "sandrominori50+uiszuzoqatr@gmail.com"
 EASYHITS_PASSWORD = "DDnmVV45!!"
 REFERER_URL = "https://www.easyhits4u.com/?ref=nicolacaporale"
+BROWSERLESS_URL = "https://production-sfo.browserless.io/chrome/bql"
 
-# Directory di output
+ACCOUNT_NAME = "main"
+REFRESH_INTERVAL = 6 * 3600  # 6 ore
+
 OUTPUT_DIR = "/tmp/easyhits4u"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ==================== SERVER HTTP PER DOWNLOAD COOKIE ====================
+# ==================== SERVER HTTP ====================
 PORT = int(os.environ.get("PORT", 10000))
-server_running = False
 
 class CookieHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -62,19 +52,13 @@ class CookieHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
-    
     def log_message(self, format, *args):
         pass
 
 def start_http_server():
-    global server_running
-    try:
-        server = HTTPServer(('0.0.0.0', PORT), CookieHandler)
-        server_running = True
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 🌐 Server HTTP avviato sulla porta {PORT} - GET /cookies per scaricare la stringa cookie")
-        server.serve_forever()
-    except Exception as e:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Errore avvio server: {e}")
+    server = HTTPServer(('0.0.0.0', PORT), CookieHandler)
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🌐 Server HTTP avviato sulla porta {PORT}")
+    server.serve_forever()
 
 threading.Thread(target=start_http_server, daemon=True).start()
 time.sleep(1)
@@ -82,6 +66,15 @@ time.sleep(1)
 # ==================== FUNZIONI ====================
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+def get_working_keys():
+    """Recupera le chiavi Browserless con status 'working' dal database"""
+    supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    resp = supabase.table('browserless_keys')\
+        .select('api_key')\
+        .eq('status', 'working')\
+        .execute()
+    return [row['api_key'] for row in resp.data]
 
 def get_cf_token(api_key):
     query = """
@@ -118,8 +111,7 @@ def get_cf_token(api_key):
 def build_cookie_string(cookies_dict):
     return '; '.join([f"{k}={v}" for k, v in cookies_dict.items()])
 
-def login_and_get_complete_cookies(api_key):
-    log(f"   🔐 TEST CHIAVE: {api_key[:15]}...")
+def login_and_get_cookies(api_key):
     session = requests.Session()
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Firefox/148.0',
@@ -131,20 +123,12 @@ def login_and_get_complete_cookies(api_key):
     }
     
     # GET homepage
-    log("   🌐 GET homepage...")
-    try:
-        home = session.get("https://www.easyhits4u.com/", headers=headers, verify=False, timeout=15)
-        log(f"      Homepage status: {home.status_code}")
-        time.sleep(1)
-    except Exception as e:
-        log(f"      ❌ Errore homepage: {e}")
-        return None, None, None
+    session.get("https://www.easyhits4u.com/", headers=headers, verify=False, timeout=15)
+    time.sleep(1)
     
-    # Token
     token = get_cf_token(api_key)
     if not token:
-        log(f"   ❌ Token non ottenuto per chiave {api_key[:15]}...")
-        return None, None, None
+        return None
     
     # POST login
     login_headers = headers.copy()
@@ -159,105 +143,109 @@ def login_and_get_complete_cookies(api_key):
         'password': EASYHITS_PASSWORD,
         'cf-turnstile-response': token,
     }
-    try:
-        login_resp = session.post("https://www.easyhits4u.com/logon/", data=data, headers=login_headers, allow_redirects=True, timeout=30)
-        log(f"      Login POST status: {login_resp.status_code}")
-        time.sleep(1)
-    except Exception as e:
-        log(f"      ❌ Errore POST login: {e}")
-        return None, None, None
+    login_resp = session.post("https://www.easyhits4u.com/logon/", data=data, headers=login_headers, allow_redirects=True, timeout=30)
+    if login_resp.status_code != 200:
+        return None
+    time.sleep(2)
     
     # GET /member/
-    log("   🌐 GET /member/...")
-    try:
-        member = session.get("https://www.easyhits4u.com/member/", headers=headers, verify=False, timeout=15)
-        log(f"      Member status: {member.status_code}")
-        time.sleep(1)
-    except Exception as e:
-        log(f"      ❌ Errore member: {e}")
-        return None, None, None
+    session.get("https://www.easyhits4u.com/member/", headers=headers, verify=False, timeout=15)
+    time.sleep(1)
     
     # GET /surf/
-    log("   🌐 GET /surf/...")
-    try:
-        surf = session.get("https://www.easyhits4u.com/surf/", headers=headers, verify=False, timeout=15)
-        log(f"      Surf page status: {surf.status_code}")
-        time.sleep(1)
-    except Exception as e:
-        log(f"      ❌ Errore surf: {e}")
-        return None, None, None
+    session.get("https://www.easyhits4u.com/surf/", headers=headers, verify=False, timeout=15)
+    time.sleep(1)
     
     # GET referer
-    log("   🌐 GET referer...")
-    try:
-        ref = session.get(REFERER_URL, headers=headers, verify=False, timeout=15)
-        log(f"      Referer status: {ref.status_code}")
-    except Exception as e:
-        log(f"      ⚠️ Errore referer: {e}")
+    session.get(REFERER_URL, headers=headers, verify=False, timeout=15)
     
-    cookies_dict = session.cookies.get_dict()
-    cookie_string = build_cookie_string(cookies_dict)
-    log(f"   🍪 Cookie ottenuti: {list(cookies_dict.keys())}")
-    
-    if 'user_id' in cookies_dict and 'sesids' in cookies_dict:
-        log(f"   ✅✅✅ LOGIN COMPLETO! user_id={cookies_dict['user_id']}, sesids={cookies_dict['sesids']}")
-        log(f"   🎉 CHIAVE FUNZIONANTE: {api_key[:15]}...")
-        return cookies_dict, cookie_string, session
-    else:
-        log(f"   ❌ Cookie essenziali mancanti: user_id={cookies_dict.get('user_id')}, sesids={cookies_dict.get('sesids')}")
-        log(f"   ❌ CHIAVE NON FUNZIONANTE: {api_key[:15]}...")
-        return None, None, None
+    cookies = session.cookies.get_dict()
+    if 'user_id' in cookies and 'sesids' in cookies:
+        cookies['surftype'] = '2'
+        cookie_string = build_cookie_string(cookies)
+        return cookie_string, cookies['user_id'], cookies['sesids']
+    return None
 
-def save_cookies(cookies_dict, cookie_string, session):
+def save_cookies(cookie_string, user_id, sesids):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    json_path = os.path.join(OUTPUT_DIR, f"cookies_{timestamp}.json")
-    with open(json_path, "w") as f:
-        json.dump(cookies_dict, f, indent=2)
-    log(f"   💾 Cookie JSON: {json_path}")
-    
-    txt_path = os.path.join(OUTPUT_DIR, f"cookie_string_{timestamp}.txt")
-    with open(txt_path, "w") as f:
+    # Salva su file
+    with open(os.path.join(OUTPUT_DIR, f"cookies_{timestamp}.json"), "w") as f:
+        json.dump({'user_id': user_id, 'sesids': sesids, 'cookie_string': cookie_string}, f, indent=2)
+    with open(os.path.join(OUTPUT_DIR, "cookies_latest.txt"), "w") as f:
         f.write(cookie_string)
-    log(f"   💾 Cookie stringa: {txt_path}")
     
-    latest_path = os.path.join(OUTPUT_DIR, "cookies_latest.txt")
-    with open(latest_path, "w") as f:
-        f.write(cookie_string)
-    log(f"   💾 Ultimo cookie: {latest_path}")
+    log("   💾 Cookie salvati su file")
     
-    session_path = os.path.join(OUTPUT_DIR, f"session_{timestamp}.pkl")
-    with open(session_path, "wb") as f:
-        pickle.dump(session, f)
-    log(f"   💾 Sessione pickle: {session_path}")
+    # Salva anche su Supabase (opzionale, per il bot di autosurf)
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        supabase.table('account_cookies').upsert({
+            'account_name': ACCOUNT_NAME,
+            'cookie_string': cookie_string,
+            'user_id': user_id,
+            'sesids': sesids,
+            'status': 'active',
+            'updated_at': datetime.now().isoformat()
+        }, on_conflict='account_name').execute()
+        log("   💾 Cookie salvati su Supabase")
+    except Exception as e:
+        log(f"   ⚠️ Errore Supabase: {e}")
+
+def generate_cookie():
+    """Tenta di generare un cookie con le chiavi working dal database"""
+    log("🔄 Generazione nuovo cookie...")
     
-    latest_session = os.path.join(OUTPUT_DIR, "session_latest.pkl")
-    with open(latest_session, "wb") as f:
-        pickle.dump(session, f)
+    keys = get_working_keys()
+    if not keys:
+        log("❌ Nessuna chiave 'working' trovata nel database")
+        return False
+    
+    log(f"🔑 Trovate {len(keys)} chiavi 'working'")
+    
+    for api_key in keys:
+        log(f"🔑 Tentativo con chiave: {api_key[:15]}...")
+        result = login_and_get_cookies(api_key)
+        if result:
+            cookie_string, user_id, sesids = result
+            log(f"🎉 Cookie generato! user_id={user_id}, sesids={sesids}")
+            save_cookies(cookie_string, user_id, sesids)
+            return True
+        else:
+            log(f"   ❌ Fallito")
+    
+    log("❌ Nessuna chiave funzionante")
+    return False
 
 def main():
     log("=" * 50)
-    log("🚀 LOGIN BROWSERLESS BQL + ACQUISIZIONE COOKIE COMPLETI")
-    log(f"📋 Chiavi da testare: {len(VALID_KEYS)}")
+    log("🚀 GENERATORE COOKIE DINAMICO (CHIAVI DA SUPABASE)")
+    log(f"📅 Intervallo: {REFRESH_INTERVAL // 3600} ore")
     log("=" * 50)
     
-    for i, api_key in enumerate(VALID_KEYS, 1):
-        log(f"\n🔑 [{i}/{len(VALID_KEYS)}] Tentativo con chiave: {api_key[:15]}...")
-        cookies_dict, cookie_string, session = login_and_get_complete_cookies(api_key)
-        if cookies_dict:
-            log("🎉 Login e navigazione riusciti! Salvo cookie...")
-            save_cookies(cookies_dict, cookie_string, session)
-            log("✅ Fatto. Cookie salvati in /tmp/easyhits4u/")
-            log(f"   🌐 curl http://localhost:{PORT}/cookies")
-            log("   ⚠️ Il servizio rimane in esecuzione per servire il file.")
-            while True:
-                time.sleep(60)
-        else:
-            log(f"   ❌ Tentativo fallito con questa chiave")
+    # Verifica connessione a Supabase
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        log("❌ SUPABASE_URL o SUPABASE_SERVICE_KEY non impostate")
+        return
     
-    log("❌ Login fallito con tutte le chiavi. Server rimane attivo per eventuali richieste.")
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        supabase.table('browserless_keys').select('count').limit(1).execute()
+        log("✅ Connessione a Supabase OK")
+    except Exception as e:
+        log(f"❌ Errore connessione Supabase: {e}")
+        return
+    
     while True:
-        time.sleep(60)
+        success = generate_cookie()
+        if success:
+            log(f"✅ Cookie generato. Prossimo tra {REFRESH_INTERVAL // 3600} ore")
+        else:
+            log("❌ Nessuna chiave funzionante. Riprovo tra 1 ora")
+            time.sleep(3600)
+            continue
+        
+        time.sleep(REFRESH_INTERVAL)
 
 if __name__ == "__main__":
     main()
