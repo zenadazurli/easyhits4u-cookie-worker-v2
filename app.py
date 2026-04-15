@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# app.py - Login con Browserless BQL + chiavi da Supabase + loop
+# app.py - Login con Browserless BQL + chiavi da Supabase + loop + DEBUG
 
 import requests
 import json
@@ -74,7 +74,15 @@ def get_working_keys():
         .select('api_key')\
         .eq('status', 'working')\
         .execute()
-    return [row['api_key'] for row in resp.data]
+    
+    keys = [row['api_key'] for row in resp.data]
+    
+    # DEBUG: stampa ogni chiave con dettagli
+    log(f"📋 DEBUG - Chiavi lette dal database ({len(keys)}):")
+    for i, key in enumerate(keys):
+        log(f"   [{i+1}] lunghezza={len(key)}, repr={repr(key[:30])}...")
+    
+    return keys
 
 def get_cf_token(api_key):
     query = """
@@ -112,6 +120,9 @@ def build_cookie_string(cookies_dict):
     return '; '.join([f"{k}={v}" for k, v in cookies_dict.items()])
 
 def login_and_get_cookies(api_key):
+    # DEBUG: mostra la chiave esatta che stiamo usando
+    log(f"   🔑 CHIAVE TEST: '{api_key[:20]}...' (len={len(api_key)})")
+    
     session = requests.Session()
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Firefox/148.0',
@@ -203,8 +214,8 @@ def generate_cookie():
     
     log(f"🔑 Trovate {len(keys)} chiavi 'working'")
     
-    for api_key in keys:
-        log(f"🔑 Tentativo con chiave: {api_key[:15]}...")
+    for i, api_key in enumerate(keys):
+        log(f"🔑 [{i+1}/{len(keys)}] Tentativo con chiave: {api_key[:15]}...")
         result = login_and_get_cookies(api_key)
         if result:
             cookie_string, user_id, sesids = result
@@ -219,7 +230,7 @@ def generate_cookie():
 
 def main():
     log("=" * 50)
-    log("🚀 GENERATORE COOKIE DINAMICO (CHIAVI DA SUPABASE)")
+    log("🚀 GENERATORE COOKIE DINAMICO (CHIAVI DA SUPABASE) - DEBUG")
     log(f"📅 Intervallo: {REFRESH_INTERVAL // 3600} ore")
     log("=" * 50)
     
