@@ -12,24 +12,16 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # ==================== CHIAVI VALIDE ====================
 VALID_KEYS = [
-    "2UKnWYAI4XjhlTbcc2b8d6928494d4a5f5542a74d00c06124",
-    "2UKnXObX8RYBJ295ef966bc0a2342b47bba9e9e07f267d129",
-    "2UKnZUgK5OICl9Tc02c85cc0d4272328dbb2f69636e31e49f",
-    "2UKnbvt91chXu5k4eeaf9dac4dec56392775bfc3d0f2bf5b0",
-    "2UKnex0F79iSOfgc76b35051414ec0c29974df1b6273bb037",
-    "2UKnoI5dfbaqB5W71071e88ff897ee16f5c09566cac51043f",
-    "2UKnwp0jDBj6L394f1f5d6b3b9be3db83ff2b75f359479b99",
-    "2UKnxh5NTuseSDqf61c86934ec2bc68cdec73d44fdccce106",
-    "2UKnzzEOtKeedO830957353ce0de6a17c94ce2f5b684463e9",
-    "2UKo1s5wjiBFm1kbc0cdca7b0264e264470bcf92167a8d8b3",
-    "2UKo2MAf1hz67Pma6ae81ea276974e4abd1d5c6049fe30562",
-    "2UKo41T4eBxMroO972f754c66c5c24a4115fc8bf8e73cb163",
-    "2UKo53fcth6cQbX24ba80659d5397546d67080ff7977b0719",
-    "2UKo7MFmnuhLQBl2fb827baa83359d5c509e765c052fbe563",
-    "2UKo8NOjaRRABF829743dddff0d99b3d7e4d6f1bdf47a6b1e",
-    "2UKoJa4UH2qXOE82abaef4a28adf70bbf170d1806e513255f",
-    "2UKoKWRM3NqPnvR4927430b0917be86ca0d88f5d33c83863d",
-    "2UKoRweE2WuHvB00fccb9dcf28457f9ed811b6db1d409656f",
+    "2UL8m6BcAfHYAFxd5ecc52e551f286dbd72cce5fa350a2091",
+    "2UL8n777kF6fwCmbfc2300911b1fac61745a7d382e65a9219",
+    "2UL8pINenLzFZZxd7139e0a88d9b01b982fa4d19fb80c5322",
+    "2UL8qeyKL6Pktwj5f32492aa3ed7aa80ebefb7a44af6ef2e2",
+    "2UL8sQdVV06yZkOd5f22643a2f467a87d06d04a2b667a6a86",
+    "2UL8ueD9EJSZeXm773e84c545f86f762185487f1b57c06fe7",
+    "2UL8wv0wEuEFmEe629ee64554980c6ae710b550e834dcfefd",
+    "2UL8xelkv5JaWc3e4faa839aa48102cf37c41ae894b532fcb",
+    "2UL8zDUapLqCSBU770f53ccdf1591ce45e6371304b72b0c92",
+    "2UL9055xj8Nv4l221a380b4cb0dab7bdc105d95ac2635539c",
 ]
 BROWSERLESS_URL = "https://production-sfo.browserless.io/chrome/bql"
 
