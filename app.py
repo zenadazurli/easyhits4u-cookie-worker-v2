@@ -242,7 +242,7 @@ def main():
     log("=" * 50)
     
     for i, api_key in enumerate(VALID_KEYS, 1):
-        log(f"\n🔑 [{i}/{len(VALID_KEYS}] Tentativo con chiave: {api_key[:15]}...")
+        log(f"\n🔑 [{i}/{len(VALID_KEYS)}] Tentativo con chiave: {api_key[:15]}...")
         cookies_dict, cookie_string, session = login_and_get_complete_cookies(api_key)
         if cookies_dict:
             log("🎉 Login e navigazione riusciti! Salvo cookie...")
