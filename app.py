@@ -248,7 +248,7 @@ def save_cookies(cookie_string, user_id, sesids):
             'password': EASYHITS_PASSWORD,
             'cookies_string': cookie_string,
             'user_id': user_id,
-            'sesid': sesids,
+            'sesids': sesids,
             'status': 'active',
             'updated_at': datetime.now().isoformat()
         }
