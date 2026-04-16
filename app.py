@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# app.py - Login con Browserless BQL + chiavi da Supabase + loop
+# app.py - Login con Browserless BQL + chiavi da Supabase (solo status='working') + loop
 
 import requests
 import json
@@ -15,13 +15,13 @@ from supabase import create_client
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 
-# CREDENZIALI - ACCOUNT ORIGINALE (QUELLO CHE FUNZIONA!)
-EASYHITS_EMAIL = "sandrominori50+giorgiofaggiolini@gmail.com"
+# CREDENZIALI - NUOVO ACCOUNT
+EASYHITS_EMAIL = "sandrominori50+nicoladellaaziendavinicola@gmail.com"
 EASYHITS_PASSWORD = "DDnmVV45!!"
 REFERER_URL = "https://www.easyhits4u.com/?ref=nicolacaporale"
 BROWSERLESS_URL = "https://production-sfo.browserless.io/chrome/bql"
 
-ACCOUNT_NAME = "main"
+ACCOUNT_NAME = "nicoladellaaziendavinicola"
 REFRESH_INTERVAL = 6 * 3600  # 6 ore
 
 OUTPUT_DIR = "/tmp/easyhits4u"
@@ -70,20 +70,28 @@ def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
 
 def get_working_keys():
-    """Recupera le chiavi Browserless con status 'working' dal database"""
+    """
+    Recupera le chiavi Browserless con status 'working' dal database
+    Pulisce i caratteri invisibili con .strip()
+    """
     supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     resp = supabase.table('browserless_keys')\
         .select('api_key')\
         .eq('status', 'working')\
         .execute()
     
-    # Pulisci le chiavi da caratteri invisibili
+    # Pulisci le chiavi da caratteri invisibili (IMPORTANTE!)
     keys = []
     for row in resp.data:
         clean_key = row['api_key'].strip()
         keys.append(clean_key)
     
     log(f"📋 Trovate {len(keys)} chiavi 'working' nel database")
+    
+    # Mostra le prime 3 chiavi (debug)
+    if keys:
+        log(f"   Prime 3 chiavi: {keys[0][:15]}..., {keys[1][:15] if len(keys) > 1 else ''}, {keys[2][:15] if len(keys) > 2 else ''}")
+    
     return keys
 
 def get_cf_token(api_key):
@@ -122,6 +130,7 @@ def build_cookie_string(cookies_dict):
     return '; '.join([f"{k}={v}" for k, v in cookies_dict.items()])
 
 def login_and_get_cookies(api_key):
+    """Tenta il login con una chiave specifica"""
     # Pulisci la chiave
     api_key = api_key.strip()
     
@@ -207,6 +216,7 @@ def login_and_get_cookies(api_key):
         return None
 
 def save_cookies(cookie_string, user_id, sesids):
+    """Salva i cookie su file e Supabase"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # Salva su file
@@ -217,7 +227,7 @@ def save_cookies(cookie_string, user_id, sesids):
     
     log("   💾 Cookie salvati su file")
     
-    # Salva anche su Supabase
+    # Salva anche su Supabase (opzionale)
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
         supabase.table('account_cookies').upsert({
@@ -257,7 +267,7 @@ def generate_cookie():
 
 def main():
     log("=" * 50)
-    log("🚀 GENERATORE COOKIE DINAMICO (CHIAVI DA SUPABASE)")
+    log("🚀 GENERATORE COOKIE DINAMICO")
     log(f"📧 Account: {EASYHITS_EMAIL}")
     log(f"📅 Intervallo: {REFRESH_INTERVAL // 3600} ore")
     log("=" * 50)
@@ -265,6 +275,7 @@ def main():
     # Verifica connessione a Supabase
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         log("❌ SUPABASE_URL o SUPABASE_SERVICE_KEY non impostate")
+        log("   Imposta le variabili d'ambiente su Render")
         return
     
     try:
@@ -275,6 +286,7 @@ def main():
         log(f"❌ Errore connessione Supabase: {e}")
         return
     
+    # Loop principale
     while True:
         success = generate_cookie()
         if success:
