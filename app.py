@@ -12,8 +12,13 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from supabase import create_client
 
 # ==================== CONFIGURAZIONE ====================
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+# Database per le chiavi Browserless
+BROWSERLESS_SUPABASE_URL = os.environ.get("BROWSERLESS_SUPABASE_URL", "https://lmtmjfrhzbjtayjwcpsq.supabase.co")
+BROWSERLESS_SUPABASE_KEY = os.environ.get("BROWSERLESS_SUPABASE_KEY")
+
+# Database per i cookie degli account
+COOKIES_SUPABASE_URL = os.environ.get("COOKIES_SUPABASE_URL", "https://ofijopixtpwahgbwyutc.supabase.co")
+COOKIES_SUPABASE_KEY = os.environ.get("COOKIES_SUPABASE_KEY")
 
 # CREDENZIALI - NUOVO ACCOUNT
 EASYHITS_EMAIL = "sandrominori50+nicoladellaaziendavinicola@gmail.com"
@@ -74,7 +79,7 @@ def get_working_keys():
     Recupera le chiavi Browserless con status 'working' dal database
     Pulisce i caratteri invisibili con .strip()
     """
-    supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    supabase = create_client(BROWSERLESS_SUPABASE_URL, BROWSERLESS_SUPABASE_KEY)
     resp = supabase.table('browserless_keys')\
         .select('api_key')\
         .eq('status', 'working')\
@@ -216,7 +221,7 @@ def login_and_get_cookies(api_key):
         return None
 
 def save_cookies(cookie_string, user_id, sesids):
-    """Salva i cookie su file e Supabase"""
+    """Salva i cookie su file e Supabase (database cookies)"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # Salva su file
@@ -227,20 +232,42 @@ def save_cookies(cookie_string, user_id, sesids):
     
     log("   💾 Cookie salvati su file")
     
-    # Salva anche su Supabase (opzionale)
+    # Salva anche su Supabase (database cookies)
     try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-        supabase.table('account_cookies').upsert({
+        supabase = create_client(COOKIES_SUPABASE_URL, COOKIES_SUPABASE_KEY)
+        
+        # Prima controlla se esiste già un record per questo account
+        existing = supabase.table('account_cookies')\
+            .select('id')\
+            .eq('account_name', ACCOUNT_NAME)\
+            .execute()
+        
+        cookie_data = {
             'account_name': ACCOUNT_NAME,
-            'cookie_string': cookie_string,
+            'email': EASYHITS_EMAIL,
+            'password': EASYHITS_PASSWORD,
+            'cookies_string': cookie_string,
             'user_id': user_id,
-            'sesids': sesids,
+            'sesid': sesids,
             'status': 'active',
             'updated_at': datetime.now().isoformat()
-        }, on_conflict='account_name').execute()
-        log("   💾 Cookie salvati su Supabase")
+        }
+        
+        if existing.data:
+            # Aggiorna esistente
+            supabase.table('account_cookies')\
+                .update(cookie_data)\
+                .eq('account_name', ACCOUNT_NAME)\
+                .execute()
+            log("   💾 Cookie aggiornati su Supabase (cookies DB)")
+        else:
+            # Inserisci nuovo
+            cookie_data['created_at'] = datetime.now().isoformat()
+            supabase.table('account_cookies').insert(cookie_data).execute()
+            log("   💾 Cookie salvati su Supabase (cookies DB - nuovo record)")
+            
     except Exception as e:
-        log(f"   ⚠️ Errore Supabase: {e}")
+        log(f"   ⚠️ Errore Supabase (cookies DB): {e}")
 
 def generate_cookie():
     """Tenta di generare un cookie con le chiavi working dal database"""
@@ -272,19 +299,32 @@ def main():
     log(f"📅 Intervallo: {REFRESH_INTERVAL // 3600} ore")
     log("=" * 50)
     
-    # Verifica connessione a Supabase
-    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-        log("❌ SUPABASE_URL o SUPABASE_SERVICE_KEY non impostate")
+    # Verifica connessione al database delle chiavi
+    if not BROWSERLESS_SUPABASE_KEY:
+        log("❌ BROWSERLESS_SUPABASE_KEY non impostata")
+        log("   Imposta le variabili d'ambiente su Render")
+        return
+    
+    if not COOKIES_SUPABASE_KEY:
+        log("❌ COOKIES_SUPABASE_KEY non impostata")
         log("   Imposta le variabili d'ambiente su Render")
         return
     
     try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        supabase = create_client(BROWSERLESS_SUPABASE_URL, BROWSERLESS_SUPABASE_KEY)
         supabase.table('browserless_keys').select('count').limit(1).execute()
-        log("✅ Connessione a Supabase OK")
+        log("✅ Connessione a Browserless DB OK")
     except Exception as e:
-        log(f"❌ Errore connessione Supabase: {e}")
+        log(f"❌ Errore connessione Browserless DB: {e}")
         return
+    
+    try:
+        supabase = create_client(COOKIES_SUPABASE_URL, COOKIES_SUPABASE_KEY)
+        supabase.table('account_cookies').select('count').limit(1).execute()
+        log("✅ Connessione a Cookies DB OK")
+    except Exception as e:
+        log(f"⚠️ Errore connessione Cookies DB: {e}")
+        log("   I cookie verranno salvati solo su file")
     
     # Loop principale
     while True:
