@@ -21,12 +21,12 @@ COOKIES_SUPABASE_URL = os.environ.get("COOKIES_SUPABASE_URL", "https://ofijopixt
 COOKIES_SUPABASE_KEY = os.environ.get("COOKIES_SUPABASE_KEY")
 
 # CREDENZIALI - NUOVO ACCOUNT
-EASYHITS_EMAIL = "sandrominori50+nicoladellaaziendavinicola@gmail.com"
+EASYHITS_EMAIL = "sandrominori50+giovannibarresi@gmail.com"
 EASYHITS_PASSWORD = "DDnmVV45!!"
 REFERER_URL = "https://www.easyhits4u.com/?ref=nicolacaporale"
 BROWSERLESS_URL = "https://production-sfo.browserless.io/chrome/bql"
 
-ACCOUNT_NAME = "nicoladellaaziendavinicola"
+ACCOUNT_NAME = "giovannibaresi"
 REFRESH_INTERVAL = 6 * 3600  # 6 ore
 
 OUTPUT_DIR = "/tmp/easyhits4u"
